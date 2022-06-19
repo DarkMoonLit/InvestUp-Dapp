@@ -6,42 +6,42 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
+//Inheriting from IERC721Receiver contract
+contract InvestUp  is IERC721Receiver {
 
-contract InvestUp is IERC721Receiver {
-
+//Using Counters Library
     using Counters for Counters.Counter;
     Counters.Counter private investorId; // counter for number of investors
 
+//State Variables
     IERC721 nft;
-    uint tokenId;
-
+    uint nftId;
     address payable owner;
-
+//Mappings
     mapping(uint => address) investors; // keeps track of investors address
-    mapping(address => bool) invested;
-    mapping(address => uint) balances; 
-
+    mapping(address => bool) invested;  //Helps to know if an invstment has taken place
+    mapping(address => uint) balances; //Maps the balance of each investor address
+//More state variables
     uint public maxInvestors; // total number of investors needed for sale
     uint public price;
     uint public time = 7 days;
     uint public profit = 2; // 200% of collected
     uint public collected; // amount collected from sale 
-
     bool ended = false;
     bool started = false;
     bool public claimed = true; 
-
+//Events
     event Start(address indexed owner, IERC721 nft, uint tokenId);
     event Buy(address indexed buyer, uint amount);
     event End(bool sold, uint amount);
     event Profit(address indexed buyer, uint profit, uint newPrice);
-
+//constructor to initialize the NFT and assign the owner of the contract
     constructor(address nftContract, uint _tokenId) {
         nft = IERC721(nftContract);
-        tokenId = _tokenId;
+        nftId = _tokenId;
         owner = payable(msg.sender);
     }
-
+//startSale function helps a seller start the sale of his NFT by sending it to the smart contract(line 53)
     function startSale(uint _price, uint _maxInvestors) public verifyEnded verifyNotStarted onlyOwner {
         require(_price > 0, "Enter a valid price");
         require(_maxInvestors > 1, "Maximum number of investors has to be greater than 1");
@@ -50,11 +50,11 @@ contract InvestUp is IERC721Receiver {
         started = true;
         maxInvestors = _maxInvestors;
         time = block.timestamp + time;
-        nft.safeTransferFrom(msg.sender, address(this), tokenId);
-        emit Start(msg.sender, nft, tokenId);
+        nft.safeTransferFrom(msg.sender, address(this), nftId);
+        emit Start(msg.sender, nft, nftId);
     }
 
-    // allows a user to instantly buy an Nft if no investors is involved
+    // Allows a user to instantly buy an Nft if no investor is involved
     function buy() public payable verifyEnded verifyTime verifyStarted verifyNotOwner {
         uint id = investorId.current();
         require(id == 0, "Investors have already bought a share of the NFT");
@@ -68,11 +68,11 @@ contract InvestUp is IERC721Receiver {
         owner = payable(msg.sender);
         (bool sent,) = owner.call{value : msg.value}("");
         require(sent, "payment failed");
-        nft.safeTransferFrom(address(this), msg.sender, tokenId);
+        nft.safeTransferFrom(address(this), msg.sender, nftId);
         emit Buy(msg.sender, collected);
 
     }
-    
+    //invest function is used by the investor who cannot invest twice(line 77)
     function invest() public payable verifyEnded verifyTime verifyStarted  verifyNotOwner {
         require(!invested[msg.sender], "Already an investor");
         uint id = investorId.current();
@@ -85,9 +85,8 @@ contract InvestUp is IERC721Receiver {
         invested[msg.sender] = true; // makes sure that sender is now an investor
         
     }
-
-    function end() public payable verifyEnded verifyStarted onlyOwner {
-        
+//This function is used to end the investment when the sale is successful
+    function end() public payable verifyEnded verifyStarted onlyOwner {  
         // runs if sale is a success
         if(collected == price){
            (bool sent,) = owner.call{value: collected}("");
@@ -107,12 +106,12 @@ contract InvestUp is IERC721Receiver {
                 address user =  investors[i];
                 balances[user] += returnAmount;
             }
-            nft.safeTransferFrom(address(this), msg.sender, tokenId);
+            nft.safeTransferFrom(address(this), msg.sender, nftId);
             emit End(false, collected);
         }
     }
 
-    // allows a user to buy the Nft from the investors
+    // Allows a user to buy the Nft from the investors as x2 its price(line 116)
     function claimNFT() public payable verifyStarted verifyNotClaimed {
         uint newPrice = 2 * price; // double of collected
         require(msg.value == newPrice, "Incorrect amount sent");
@@ -122,12 +121,13 @@ contract InvestUp is IERC721Receiver {
                 address user =  investors[i];
                 balances[user] += individualProfit;
             }
-        nft.safeTransferFrom(address(this), msg.sender, tokenId);
+            //Transfer the NFT to the buyer
+        nft.safeTransferFrom(address(this), msg.sender, nftId);
         claimed = true;
         collected += newPrice;
         emit Profit(msg.sender, profit, newPrice);
     }
-
+//each investor can use this function to withdaw thier funds plus profit
     function withdraw() public payable { 
         require(balances[msg.sender] > 0, "No amount to withdraw");
         uint refundAmount = balances[msg.sender];
@@ -141,11 +141,11 @@ contract InvestUp is IERC721Receiver {
         uint minAmount = price / maxInvestors;
         return minAmount;
     }
-
+//Returns minimum amount that investor will get
     function getMinAmount() public view verifyEnded verifyStarted returns (uint) {
         return calcMinAmount();
     }
-
+//Gets the double price of the NFT that investors will send
     function getNewPrice() public view verifyNotClaimed returns (uint) {
         uint newPrice = 2 * price;
         return newPrice;
@@ -185,9 +185,8 @@ contract InvestUp is IERC721Receiver {
         require(msg.sender != owner, "Only investor or buyer");
         _;
     }
-
-    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
-        return bytes4(this.onERC721Received.selector);
+//Use this function to get the NFT that are sent to this contract
+ function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external  pure override returns (bytes4) {
+     return IERC721Receiver.onERC721Received.selector;
     }
-
 }
