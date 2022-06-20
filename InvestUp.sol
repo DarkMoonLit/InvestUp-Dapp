@@ -45,13 +45,19 @@ contract InvestUp is IERC721Receiver {
     function startSale(uint _price, uint _maxInvestors) public verifyEnded verifyNotStarted onlyOwner {
         require(_price > 0, "Enter a valid price");
         require(_maxInvestors > 1, "Maximum number of investors has to be greater than 1");
-        require((_price + (_maxInvestors * 1 ether)) % 2 == 0, "Decimal error"); // Prevents any decimal values to be assigned
+        require(isPriceWhole(_price, _maxInvestors), "Decimal error, price has to be a whole number when divided by max Investors"); // Prevents any decimal values to be assigned
         price = _price;
         started = true;
         maxInvestors = _maxInvestors;
         time = block.timestamp + time;
         nft.safeTransferFrom(msg.sender, address(this), tokenId);
         emit Start(msg.sender, nft, tokenId);
+    }
+
+    // function to verify if _price and _maxInvestors will be a whole number
+    function isPriceWhole(uint _price, uint _maxInvestors) public pure returns (bool){
+        uint number = _price + (_maxInvestors * 1 ether);
+        return number % 2 == 0 ? true : false;
     }
 
     // allows a user to instantly buy an Nft if no investors is involved
@@ -186,7 +192,9 @@ contract InvestUp is IERC721Receiver {
         _;
     }
 
-    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata) external override returns (bytes4) {
+    function onERC721Received(address operator, address from, uint256, bytes calldata) external pure override returns (bytes4) {
+        require(operator != address(0), "Invalid address");
+        require(from != address(0), "Invalid address");
         return bytes4(this.onERC721Received.selector);
     }
 
